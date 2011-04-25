@@ -357,8 +357,8 @@ public final class Launcher extends Activity implements View.OnClickListener, On
 	//or completely redo the desktop dots implementation
 	private final static int MAX_SCREENS=7;
 	//ADW: NAVIGATION VALUES FOR THE NEXT/PREV CATALOG ACTIONS
-	private final static int ACTION_CATALOG_PREV=1;
-	private final static int ACTION_CATALOG_NEXT=2;
+	public final static int ACTION_CATALOG_PREV=1;
+	public final static int ACTION_CATALOG_NEXT=2;
 	//ADW: Custom counter receiver
 	private CounterReceiver mCounterReceiver;
 	/**
@@ -4491,7 +4491,7 @@ public final class Launcher extends Activity implements View.OnClickListener, On
         }
 	}
 
-	private void navigateCatalogs(int direction){
+	public void navigateCatalogs(int direction){
 		final ApplicationsAdapter drawerAdapter = sModel.getApplicationsAdapter();
 		if (drawerAdapter == null)
 			return;
@@ -4526,13 +4526,13 @@ public final class Launcher extends Activity implements View.OnClickListener, On
 	    	AlmostNexusSettingsHelper.setCurrentAppCatalog(Launcher.this, currentFIndex);
         mAllAppsGrid.updateAppGrp();
         // Uncomment this to show a toast with the name of the new group...
-	    /*String name = currentFIndex ==  AppGroupAdapter.APP_GROUP_ALL ?
+	    String name = currentFIndex ==  AppGroupAdapter.APP_GROUP_ALL ?
 	    		getString(R.string.AppGroupAll) :
 	    		AppCatalogueFilters.getInstance().getGroupTitle(currentFIndex);
 	    if (name != null) {
 	    	Toast t=Toast.makeText(this, name, Toast.LENGTH_SHORT);
 	    	t.show();
-	    } */
+	    }
 	}
 
 	private void updateCounters(View view, String packageName, int counter, int color){
