@@ -18,7 +18,7 @@ package com.android.launcher;
 
 //import com.android.launcher.catalogue.CataGridView;
 
-import org.adw.launcher.FlingGesture.FlingListener;
+import com.android.launcher.FlingGesture.FlingListener;
 
 import android.content.Context;
 import android.graphics.Bitmap;
