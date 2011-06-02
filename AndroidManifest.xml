@@ -65,7 +65,7 @@
 	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 	<uses-permission android:name="android.permission.PERSISTENT_ACTIVITY" />
 	<application android:name="LauncherApplication"
-		android:process="android.process.acore" android:label="@string/application_name"
+		android:label="@string/application_name"
 		android:icon="@drawable/ic_launcher_home">
 
 		<activity android:name="Launcher" android:launchMode="singleTask"
