@@ -371,8 +371,6 @@ public final class Launcher extends Activity implements View.OnClickListener, On
     private int mDockStyle=DOCK_STYLE_3;
     //DRAWER STYLES
     private final int[]mDrawerStyles={R.layout.old_drawer, R.layout.new_drawer};
-    Toast mToast;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
 		mMessWithPersistence=AlmostNexusSettingsHelper.getSystemPersistent(this);
@@ -424,7 +422,6 @@ public final class Launcher extends Activity implements View.OnClickListener, On
 
         //ADW: register a sharedpref listener
         getSharedPreferences("launcher.preferences.almostnexus", Context.MODE_PRIVATE).registerOnSharedPreferenceChangeListener(this);
-        mToast = Toast.makeText(this, "", Toast.LENGTH_SHORT);
     }
 
     private void checkForLocaleChange() {
@@ -3678,9 +3675,10 @@ public final class Launcher extends Activity implements View.OnClickListener, On
 			allAppsOpen=true;
 			mWorkspace.enableChildrenCache();
 	        mWorkspace.lock();
-	        if (filter == null)
-                        filter = AppCatalogueFilters.getInstance().getDrawerFilter();
-                sModel.getApplicationsAdapter().setCatalogueFilter(filter);
+	        if (filter != null)
+	        	sModel.getApplicationsAdapter().setCatalogueFilter(filter);
+	        else
+	        	sModel.getApplicationsAdapter().setCatalogueFilter(AppCatalogueFilters.getInstance().getDrawerFilter());
 	        //mDesktopLocked=true;
 	        mWorkspace.invalidate();
 	        checkActionButtonsSpecialMode();
@@ -3689,18 +3687,10 @@ public final class Launcher extends Activity implements View.OnClickListener, On
     	    mNextView.setVisibility(View.GONE);
     	    if(mDesktopIndicator!=null)mDesktopIndicator.hide();
 		}
-		else if (filter == null)
-                        filter = AppCatalogueFilters.getInstance().getDrawerFilter();
-            sModel.getApplicationsAdapter().setCatalogueFilter(filter);
-            int currentFIndex = filter.getCurrentFilterIndex();
-            String name = currentFIndex ==  AppGroupAdapter.APP_GROUP_ALL ?
-                null : AppCatalogueFilters.getInstance().getGroupTitle(currentFIndex);
-            if (name != null) {
-                mToast.setText(name);
-                mToast.show();
-            } else {
-                mToast.cancel();
-            }
+		else if (filter != null)
+	        sModel.getApplicationsAdapter().setCatalogueFilter(filter);
+	    else
+	    	sModel.getApplicationsAdapter().setCatalogueFilter(AppCatalogueFilters.getInstance().getDrawerFilter());
     }
 
     private void checkActionButtonsSpecialMode() {
@@ -3742,7 +3732,6 @@ public final class Launcher extends Activity implements View.OnClickListener, On
 			mAllAppsGrid.close(animated && allowDrawerAnimations);
             mAllAppsGrid.clearTextFilter();
 		}
-            mToast.cancel();
     }
     boolean isAllAppsVisible() {
     	return allAppsOpen;
@@ -4503,7 +4492,6 @@ public final class Launcher extends Activity implements View.OnClickListener, On
 	}
 
 	public void navigateCatalogs(int direction){
-
 		final ApplicationsAdapter drawerAdapter = sModel.getApplicationsAdapter();
 		if (drawerAdapter == null)
 			return;
@@ -4539,13 +4527,12 @@ public final class Launcher extends Activity implements View.OnClickListener, On
         mAllAppsGrid.updateAppGrp();
         // Uncomment this to show a toast with the name of the new group...
 	    String name = currentFIndex ==  AppGroupAdapter.APP_GROUP_ALL ?
-                null : AppCatalogueFilters.getInstance().getGroupTitle(currentFIndex);
-            if (name != null) {
-                mToast.setText(name);
-                mToast.show();
-            } else {
-                mToast.cancel();
-            }
+	    		getString(R.string.AppGroupAll) :
+	    		AppCatalogueFilters.getInstance().getGroupTitle(currentFIndex);
+	    if (name != null) {
+	    	Toast t=Toast.makeText(this, name, Toast.LENGTH_SHORT);
+	    	t.show();
+	    }
 	}
 
 	private void updateCounters(View view, String packageName, int counter, int color){
