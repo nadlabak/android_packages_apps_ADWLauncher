@@ -52,6 +52,14 @@
 				android:dialogMessage="@string/pref_dialog_desktop_overshoot"
 				android:key="desktopBounce" android:defaultValue="@integer/config_desktopBounce"
 				android:max="100" />
+            <ListPreference
+                android:key="desktop_transition_style"
+                android:title="@string/pref_title_desktop_transition"
+                android:summary="@string/pref_summary_desktop_transition"
+                android:defaultValue="@string/config_desktop_transition"
+                android:entryValues="@array/desktop_transition_values"
+                android:entries="@array/desktop_transition_entries"
+            />
 		</PreferenceCategory>
 	</PreferenceScreen>
 	<PreferenceScreen
@@ -72,6 +80,14 @@
                 android:defaultValue="@bool/config_drawer_navigate_catalogs"
                 android:summary="@string/pref_summary_drawer_navigate_catalogs"
                 android:key="drawer_navigate_catalogs" />
+            <CheckBoxPreference android:title="@string/pref_title_drawer_ungroup_catalog"
+                android:defaultValue="@bool/config_drawer_ungroup_catalog"
+                android:summary="@string/pref_summary_drawer_ungroup_catalog"
+                android:key="drawer_ungroup_catalog" />
+            <CheckBoxPreference android:title="@string/pref_title_drawer_show_catalogs"
+                android:defaultValue="@bool/config_drawer_title_catalogs"
+                android:summary="@string/pref_summary_drawer_show_catalogs"
+                android:key="drawer_show_catalogs" />
 			<com.android.launcher.DialogSeekBarPreference
 				android:title="@string/pref_title_drawer_columns_portrait"
 				android:summary="@string/pref_summary_drawer_columns_portrait"

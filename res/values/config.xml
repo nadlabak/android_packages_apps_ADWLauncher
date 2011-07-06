@@ -59,6 +59,7 @@
     <bool name="config_desktop_indicator_autohide">false</bool>
     <!-- 1=top dots, 2=top slider, 3=bottom slider -->
     <string name="config_desktop_indicator_type">1</string>
+    <string name="config_desktop_transition">1</string>
     <bool name="config_system_persistent">false</bool>
     <!-- 1=sensor, 2=portrait, 3=landscape -->
     <string name="config_orientation_default">1</string>
@@ -66,6 +67,8 @@
     <string name="config_screenCache">2</string>
     <bool name="config_nagScreen">true</bool>
     <bool name="config_drawer_navigate_catalogs">true</bool>
+    <bool name="config_drawer_ungroup_catalog">false</bool>
+    <bool name="config_drawer_title_catalogs">true</bool>
     <bool name="config_notif_receiver">true</bool>
     <!-- config_notif_size min is 10, so it will add 10 to whatever value you set here -->
     <integer name="config_notif_size">4</integer>

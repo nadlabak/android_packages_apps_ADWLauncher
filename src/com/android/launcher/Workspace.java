@@ -34,7 +34,9 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.PaintFlagsDrawFilter;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -51,6 +53,7 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.animation.Transformation;
 import android.widget.TextView;
 
 /**
@@ -168,6 +171,19 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
     //ADW: variable to track the proper Y position to draw the wallpaer when the wallpaper hack is enabled
     //this is to avoid the small vertical position change from the wallpapermanager one.
     private int mWallpaperY;
+
+    // used for transitions
+    private static PaintFlagsDrawFilter sFilterBitmap = new PaintFlagsDrawFilter(0, Paint.FILTER_BITMAP_FLAG);
+    private static PaintFlagsDrawFilter sFilterBitmapRemove = new PaintFlagsDrawFilter(Paint.FILTER_BITMAP_FLAG, 0); 
+
+    private boolean mIsTransformRotate = false;
+    private int mTransformRotateAnchor = 0;
+    private boolean mIsTransitionNegative = false;
+    
+    private boolean mIsTransformOtherView = false;
+    private float mTransformAmount = 0;
+
+    
     /**
      * Used to inflate the Workspace from XML.
      *
@@ -544,86 +560,151 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
-        boolean restore = false;
+        //boolean restore = false;
         //ADW: If using old wallpaper rendering method...
         if(!lwpSupport && mWallpaperDrawable!=null){
-        	float x = getScrollX() * mWallpaperOffset;
-    		if (x + mWallpaperWidth < getRight() - getLeft()) {
-    			x = getRight() - getLeft() - mWallpaperWidth;
-    		}
-        	//ADW: added tweaks for when scrolling "beyond bounce limits" :P
-    		if (mScrollX<0)x=mScrollX;
-        	if(mScrollX>getChildAt(getChildCount() - 1).getRight() - (mRight - mLeft)){
-        		x=(mScrollX-mWallpaperWidth+(mRight-mLeft));
-        	}
-        	//if(getChildCount()==1)x=getScrollX();
-        	//ADW lets center the wallpaper when there's only one screen...
-        	if(!mWallpaperScroll || getChildCount()==1)x=(getScrollX()-(mWallpaperWidth/2)+(getRight()/2));
-        	final int y=mWallpaperY;
-    		canvas.drawBitmap(mWallpaperDrawable.getBitmap(), x, y, mPaint);
+            float x = getScrollX() * mWallpaperOffset;
+            if (x + mWallpaperWidth < getRight() - getLeft()) {
+                x = getRight() - getLeft() - mWallpaperWidth;
+            }
+            //ADW: added tweaks for when scrolling "beyond bounce limits" :P
+            if (mScrollX<0)x=mScrollX;
+            if(mScrollX>getChildAt(getChildCount() - 1).getRight() - (mRight - mLeft)){
+                x=(mScrollX-mWallpaperWidth+(mRight-mLeft));
+            }
+            //if(getChildCount()==1)x=getScrollX();
+            //ADW lets center the wallpaper when there's only one screen...
+            if(!mWallpaperScroll || getChildCount()==1)x=(getScrollX()-(mWallpaperWidth/2)+(getRight()/2));
+            final int y=mWallpaperY;
+            if (x > 0 || y > 0) { // if the bitmap does not fill the entire window
+                canvas.drawColor(0xff000000);
+            }
+            canvas.drawBitmap(mWallpaperDrawable.getBitmap(), x, y, mPaint);
         }
         if(!mSensemode){
-	        // If the all apps drawer is open and the drawing region for the workspace
-	        // is contained within the drawer's bounds, we skip the drawing. This requires
-	        // the drawer to be fully opaque.
-	        if((mLauncher.isAllAppsVisible()) || mLauncher.isEditMode()){
-	        	return;
-	        }
-	        // ViewGroup.dispatchDraw() supports many features we don't need:
-	        // clip to padding, layout animation, animation listener, disappearing
-	        // children, etc. The following implementation attempts to fast-track
-	        // the drawing dispatch by drawing only what we know needs to be drawn.
+            // If the all apps drawer is open and the drawing region for the workspace
+            // is contained within the drawer's bounds, we skip the drawing. This requires
+            // the drawer to be fully opaque.
+            if((mLauncher.isAllAppsVisible()) || mLauncher.isEditMode()){
+                return;
+            }
+            // ViewGroup.dispatchDraw() supports many features we don't need:
+            // clip to padding, layout animation, animation listener, disappearing
+            // children, etc. The following implementation attempts to fast-track
+            // the drawing dispatch by drawing only what we know needs to be drawn.
 
-	        boolean fastDraw = mTouchState != TOUCH_STATE_SCROLLING && mNextScreen == INVALID_SCREEN;
-	        // If we are not scrolling or flinging, draw only the current screen
-	        if (fastDraw) {
-	            drawChild(canvas, getChildAt(mCurrentScreen), getDrawingTime());
-	        } else {
-	            final long drawingTime = getDrawingTime();
-	            // If we are flinging, draw only the current screen and the target screen
-	            if (mNextScreen >= 0 && mNextScreen < getChildCount() &&
-	                    Math.abs(mCurrentScreen - mNextScreen) == 1) {
-	                drawChild(canvas, getChildAt(mCurrentScreen), drawingTime);
-	                drawChild(canvas, getChildAt(mNextScreen), drawingTime);
-	            } else {
-	                // If we are scrolling, draw all of our children
-	                final int count = getChildCount();
-	                for (int i = 0; i < count; i++) {
-	                    drawChild(canvas, getChildAt(i), drawingTime);
-	                }
-	            }
-	        }
+            int nextScreen = mNextScreen;
+            boolean isNextScreen = ( nextScreen == INVALID_SCREEN );
+            boolean fastDraw = mTouchState != TOUCH_STATE_SCROLLING && isNextScreen;
+            // If we are not scrolling or flinging, draw only the current screen
+            
+            if (fastDraw) {
+                drawChild(canvas, getChildAt(mCurrentScreen), getDrawingTime());
+            } else {
+                // If we are flinging, draw only the current screen and the target screen
+                final long drawingTime = getDrawingTime();
+
+                // lets calculate the current screen since it can move on use 
+                int currentScreen;
+                int width = getWidth();
+                int scrollX = mScrollX;
+                int leftSideScreen = ( scrollX / width );
+                boolean isMovingRight = scrollX >= 0 && leftSideScreen >= mCurrentScreen;
+                if ( isMovingRight )
+                {
+                    currentScreen = Math.min( leftSideScreen, getChildCount() - 1);
+                }
+                else if ( scrollX < 0 )
+                {
+                    currentScreen = 0;
+                }
+                else
+                {
+                    currentScreen = leftSideScreen + 1;
+                }
+                
+                CellLayout currentView = (CellLayout) getChildAt(currentScreen);
+                int viewLeft = currentView.getLeft();
+                
+                int mTransitionStyle = mLauncher.mTransitionStyle;
+                if ( mTransitionStyle != 1 )
+                {
+                    int xOffset = scrollX - viewLeft;
+                    float transformAmount = Math.abs( xOffset )/(float)width;
+                    preTransitionDraw(canvas, mTransitionStyle, isMovingRight, xOffset, transformAmount, width);
+                    drawChild(canvas, currentView, getDrawingTime());
+                    postTransitionDraw(canvas, mTransitionStyle, isMovingRight, xOffset, transformAmount, width);
+                }
+                else
+                {
+                    drawChild(canvas, currentView, getDrawingTime());
+                }
+
+                if (viewLeft > scrollX )
+                {
+                    if ( currentScreen > 0 )
+                    {
+                        drawChild(canvas, getChildAt(currentScreen - 1), drawingTime);
+                    }
+                }
+                else if (isMovingRight )
+                {
+                    if ( currentScreen < getChildCount() - 1 )
+                    {
+                        drawChild(canvas, getChildAt(currentScreen + 1), drawingTime);
+                    }
+                }
+                
+                if (mTransitionStyle != 1 )
+                {
+                    finishTransitionDraw(canvas, mTransitionStyle);
+                }
+
+                /*
+                if (nextScreen >= 0 && nextScreen < getChildCount() &&
+                        Math.abs(mCurrentScreen - nextScreen) == 1) {
+                    drawChild(canvas, currentView, drawingTime);
+                    drawChild(canvas, getChildAt(nextScreen), drawingTime);
+                } else {
+                    // If we are scrolling, draw all of our children
+                    final int count = getChildCount();
+                    for (int i = 0; i < count; i++) {
+                        drawChild(canvas, getChildAt(i), drawingTime);
+                    }
+                }
+                */
+            }
         }else{
-    		long currentTime;
-    		if(startTime==0){
-    			startTime=SystemClock.uptimeMillis();
-    			currentTime=0;
-    		}else{
-    			currentTime=SystemClock.uptimeMillis()-startTime;
-    		}
-    		if(currentTime>=mAnimationDuration){
-    			isAnimating=false;
-    			if(mStatus==SENSE_OPENING){
-    				mStatus=SENSE_OPEN;
-    			}else if(mStatus==SENSE_CLOSING){
-    				mStatus=SENSE_CLOSED;
-    				mSensemode=false;
-    				clearChildrenCache();
-    				unlock();
-    				postInvalidate();
-    			}
-    		}else{
-    			postInvalidate();
-    		}
+            long currentTime;
+            if(startTime==0){
+                startTime=SystemClock.uptimeMillis();
+                currentTime=0;
+            }else{
+                currentTime=SystemClock.uptimeMillis()-startTime;
+            }
+            if(currentTime>=mAnimationDuration){
+                isAnimating=false;
+                if(mStatus==SENSE_OPENING){
+                    mStatus=SENSE_OPEN;
+                }else if(mStatus==SENSE_CLOSING){
+                    mStatus=SENSE_CLOSED;
+                    mSensemode=false;
+                    clearChildrenCache();
+                    unlock();
+                    postInvalidate();
+                }
+            }else{
+                postInvalidate();
+            }
             final int count = getChildCount();
             for (int i = 0; i < count; i++) {
                 drawChild(canvas, getChildAt(i), getDrawingTime());
             }
         }
-        float x = getScrollX();
-        if (restore) {
-            canvas.restore();
-        }
+//        float x = getScrollX();
+//        if (restore) {
+//            canvas.restore();
+//        }
     }
 
     @Override
@@ -822,7 +903,7 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
                     if (xDiff > yDiff) {
                         // Scroll if the user moved far enough along the X axis
                         mTouchState = TOUCH_STATE_SCROLLING;
-                        enableChildrenCache();
+                        enableChildrenCache(mCurrentScreen - 1, mCurrentScreen + 1);
 
                     }
                     // If yDiff > xDiff means the finger path pitch is bigger than 45deg so we assume the user want to either scroll Y or Y-axis gesture
@@ -895,21 +976,26 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
          */
         return mTouchState != TOUCH_STATE_REST;
     }
-	void enableChildrenCache() {
+    void enableChildrenCache(int fromScreen, int toScreen) {
         if(mDesktopCacheType!=AlmostNexusSettingsHelper.CACHE_DISABLED){
-	    	final int count = getChildCount();
-	        for (int i = 0; i < count; i++) {
-	        	//ADW: create cache only for current screen/previous/next.
-	        	if(i>=mCurrentScreen-1 || i<=mCurrentScreen+1){
-	        		final CellLayout layout = (CellLayout) getChildAt(i);
-	        		if(mDesktopCacheType==AlmostNexusSettingsHelper.CACHE_LOW)
-	        			layout.setDrawingCacheQuality(View.DRAWING_CACHE_QUALITY_LOW);
-	        		else
-	        			layout.setDrawingCacheQuality(View.DRAWING_CACHE_QUALITY_AUTO);
-	        		layout.setChildrenDrawnWithCacheEnabled(true);
-	        		layout.setChildrenDrawingCacheEnabled(true);
-	        	}
-	        }
+            if ( fromScreen > toScreen )
+            {
+                int temp = fromScreen;
+                fromScreen = toScreen;
+                toScreen = temp;
+            }
+            fromScreen = Math.max( fromScreen, 0);
+            toScreen = Math.min( toScreen, getChildCount() - 1);
+            for (int i = fromScreen; i <= toScreen; i++) {
+                CellLayout layout = (CellLayout) getChildAt(i);
+                if(mDesktopCacheType==AlmostNexusSettingsHelper.CACHE_LOW)
+                    layout.setDrawingCacheQuality(View.DRAWING_CACHE_QUALITY_LOW);
+                else
+                    layout.setDrawingCacheQuality(View.DRAWING_CACHE_QUALITY_AUTO);
+                
+                layout.setChildrenDrawnWithCacheEnabled(true);
+                layout.setChildrenDrawingCacheEnabled(true);
+            }
         }
     }
 
@@ -1003,7 +1089,7 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
     void snapToScreen(int whichScreen) {
         //if (!mScroller.isFinished()) return;
         clearVacantCache();
-        enableChildrenCache();
+        enableChildrenCache(mCurrentScreen, whichScreen);
 
         whichScreen = Math.max(0, Math.min(whichScreen, getChildCount() - 1));
         boolean changingScreens = whichScreen != mCurrentScreen;
@@ -1051,7 +1137,7 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
 
         CellLayout current = ((CellLayout) getChildAt(mCurrentScreen));
         final ItemInfo info = (ItemInfo)child.getTag();
-        mLauncher.showActions(info, child);
+        mLauncher.showActions(info, child, null);
 
         current.onDragChild(child);
         mDragger.startDrag(child, this, child.getTag(), DragController.DRAG_ACTION_MOVE);
@@ -1093,7 +1179,14 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
     }
 
     public void onDrop(DragSource source, int x, int y, int xOffset, int yOffset, Object dragInfo) {
-        final CellLayout cellLayout = getCurrentDropLayout();
+        
+    	// if drawer is still open, then don't drop on workspace!
+    	if ( mLauncher.isAllAppsVisible() )
+    	{
+    		return;
+    	}
+    	
+    	final CellLayout cellLayout = getCurrentDropLayout();
         if (source != this) {
             onDropExternal(x - xOffset, y - yOffset, dragInfo, cellLayout);
         } else {
@@ -1507,6 +1600,25 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
                     			info.spanY, false);
                     	break;
                     }
+                }else if (tag instanceof UserFolderInfo){
+                    //TODO: ADW: Maybe there are icons inside folders.... need to update them too
+                    final UserFolderInfo folderInfo = (UserFolderInfo) tag;
+                    final ArrayList<ApplicationInfo> contents = folderInfo.contents;
+                    final int contentsCount = contents.size();
+                    for (int k = 0; k < contentsCount; k++) {
+                        final ApplicationInfo appInfo = contents.get(k);
+                        if (appInfo.id == info.id)
+                        {
+                            appInfo.assignFrom(info);
+                            if (!info.filtered) {
+                                info.icon = Utilities.createIconThumbnail(info.icon, getContext());
+                                info.filtered = true;
+                            }
+
+                            final Folder folder = getOpenFolder();
+                            if (folder != null) folder.notifyDataSetChanged();
+                        }
+                    }
                 }
             }
         }
@@ -1552,7 +1664,7 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
                         final Intent intent = appInfo.intent;
                         final ComponentName name = intent.getComponent();
                         if ((appInfo.itemType == LauncherSettings.Favorites.ITEM_TYPE_APPLICATION ||
-                                info.itemType == LauncherSettings.Favorites.ITEM_TYPE_SHORTCUT)&&
+                                appInfo.itemType == LauncherSettings.Favorites.ITEM_TYPE_SHORTCUT)&&
                                 Intent.ACTION_MAIN.equals(intent.getAction()) && name != null &&
                                 packageName.equals(name.getPackageName())) {
 
@@ -1674,7 +1786,7 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
 	}
 	public void openSense(boolean open){
 		mScroller.abortAnimation();
-		enableChildrenCache();
+		enableChildrenCache(0, getChildCount());
         //TODO:ADW We nedd to find the "longer row" and get the best children width
         int maxItemsPerRow=0;
         int distro_set=getChildCount()-1;
@@ -1714,35 +1826,34 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
 				long currentTime=SystemClock.uptimeMillis()-startTime;
 				Rect r1=new Rect(0, 0, child.getWidth(), child.getHeight());
 				RectF r2=getScaledChild(child);
-				float x=0; float y=0; float width=0;float height=0; float alpha=255;
-				if(mStatus==SENSE_OPENING){
-					alpha=easeOut(currentTime,0,100,mAnimationDuration);
-					x=easeOut(currentTime, child.getLeft(), r2.left, mAnimationDuration);
-					y=easeOut(currentTime, child.getTop(), r2.top, mAnimationDuration);
-					width=easeOut(currentTime, child.getRight(), r2.right, mAnimationDuration);
-					height=easeOut(currentTime, child.getBottom(), r2.bottom, mAnimationDuration);
+				float x=0; float y=0; float width=0; float alpha=255;
+                if(mStatus==SENSE_OPENING){
+                    int animationDuration = mAnimationDuration;
+					alpha=easeOut(currentTime,0,100,animationDuration);
+					x=easeOut(currentTime, child.getLeft(), r2.left, animationDuration);
+					y=easeOut(currentTime, child.getTop(), r2.top, animationDuration);
+					width=easeOut(currentTime, child.getRight(), r2.right, animationDuration);
 				}else if (mStatus==SENSE_CLOSING){
-					alpha=easeOut(currentTime,100,0,mAnimationDuration);
-					x=easeOut(currentTime, r2.left,child.getLeft(), mAnimationDuration);
-					y=easeOut(currentTime, r2.top, child.getTop(), mAnimationDuration);
-					width=easeOut(currentTime, r2.right, child.getRight(), mAnimationDuration);
-					height=easeOut(currentTime, r2.bottom, child.getBottom(), mAnimationDuration);
+	                int animationDuration = mAnimationDuration;
+					alpha=easeOut(currentTime,100,0,animationDuration);
+					x=easeOut(currentTime, r2.left,child.getLeft(), animationDuration);
+					y=easeOut(currentTime, r2.top, child.getTop(), animationDuration);
+					width=easeOut(currentTime, r2.right, child.getRight(), animationDuration);
 				}else if(mStatus==SENSE_OPEN){
 					x=r2.left;
 					y=r2.top;
 					width=r2.right;
-					height=r2.bottom;
 					alpha=100;
 				}
 				float scale=((width-x)/r1.width());
-				canvas.save();
+				//canvas.save();
 				canvas.translate(x, y);
 				canvas.scale(scale,scale);
 				mPaint.setAlpha((int) alpha);
 				canvas.drawRoundRect(new RectF(r1.left+5,r1.top+5,r1.right-5, r1.bottom-5), 15f, 15f, mPaint);
 				mPaint.setAlpha(255);
 				child.draw(canvas);
-				canvas.restore();
+				//canvas.restore();
 			}else{
 				child.draw(canvas);
 			}
@@ -2075,4 +2186,276 @@ public class Workspace extends WidgetSpace implements DropTarget, DragSource, Dr
         if(mLauncher!=null)mWallpaperY=h - mLauncher.getWindow().getDecorView().getHeight();
     }
 
+    @Override
+    protected boolean getChildStaticTransformation(View child, Transformation transformation)
+    {
+        float transformAmount = mTransformAmount;
+        
+        if ( mIsTransformRotate )
+        {
+            Matrix matrix = transformation.getMatrix();
+
+            int offset = mIsTransformOtherView?90:0;
+            if ( mIsTransitionNegative )
+            {
+                offset = -offset;
+            }
+            matrix.setRotate(transformAmount * 90 + offset, mTransformRotateAnchor, 0);
+            
+            float amount;
+            if ( mIsTransformOtherView )
+            {
+                amount = Math.abs( transformAmount );
+            }
+            else
+            {
+                amount = 1 - Math.abs( transformAmount );
+            }
+            if ( amount < 0.5f )
+            {
+                transformation.setTransformationType(Transformation.TYPE_BOTH);
+                transformation.setAlpha(amount * 2);
+            }
+            else
+            {
+                transformation.setTransformationType(Transformation.TYPE_MATRIX);
+                transformation.setAlpha(1);
+            }
+        }
+        else // must be transformation then
+        {
+            Matrix matrix = transformation.getMatrix();
+
+            float width = (float) child.getWidth();
+            float height = (float) child.getHeight();
+            float sourceMatrix[] = new float[] {0f, 0f, width, 0, width, height, 0, height};
+            float targetMatrix[] = new float[] {0f, 0f, width, 0, width, height, 0, height};
+
+            if( mIsTransformOtherView )
+            {
+                if ( !mIsTransitionNegative )
+                {
+                    targetMatrix[7] *= ( 1 - ( -transformAmount / 3));
+                    targetMatrix[1] = height - targetMatrix[7];
+
+                    targetMatrix[0] = targetMatrix[2] * -transformAmount; 
+                    targetMatrix[6] = targetMatrix[0];
+                }
+                else
+                {
+                    targetMatrix[5] *= ( 1 - ( ( 1 - transformAmount ) / 3));
+                    targetMatrix[3] = height - targetMatrix[5];
+
+                    targetMatrix[2] = targetMatrix[2] * transformAmount;
+                    targetMatrix[4] = targetMatrix[2];
+                }
+            }
+            else if ( mIsTransitionNegative ) // !mIsTransformOtherView
+            {
+                targetMatrix[7] *= ( 1 - ( -transformAmount / 3));
+                targetMatrix[1] = height - targetMatrix[7];
+
+                targetMatrix[2] *= ( 1 - -transformAmount ); 
+                targetMatrix[4] = targetMatrix[2];
+            }
+            else
+            {
+                targetMatrix[5] *= ( 1 - ( transformAmount / 3));
+                targetMatrix[3] = height - targetMatrix[5];
+
+                targetMatrix[2] *= ( 1 - transformAmount ); 
+                targetMatrix[4] = targetMatrix[2];
+            }
+
+            matrix.setPolyToPoly(sourceMatrix, 0, targetMatrix, 0, sourceMatrix.length >> 1);
+
+            float amount = Math.abs( transformAmount );
+            if ( mIsTransformOtherView )
+            {
+                if ( !mIsTransitionNegative )
+                {
+                    amount = 1 - amount;
+                }
+            }
+            else
+            {
+                amount = 1 - amount;
+            }
+            if ( amount > .5f )
+            {
+                transformation.setTransformationType(Transformation.TYPE_MATRIX);
+                transformation.setAlpha(1);
+            }
+            else
+            {
+                transformation.setTransformationType(Transformation.TYPE_BOTH);
+                transformation.setAlpha(amount * 2);
+            }
+        }
+    
+        return true;
+    }
+
+    private void preTransitionDraw(Canvas canvas, int mTransitionStyle, boolean isMovingRight, int xOffset, float transformAmount, int width )
+    {
+        if ( mTransitionStyle == 2 )  // rotate
+        {
+            canvas.save();
+            mIsTransformRotate = true;
+            mIsTransitionNegative = isMovingRight;
+            if ( isMovingRight )
+            {
+                mTransformAmount = transformAmount;
+                mTransformRotateAnchor = 0;
+            }
+            else
+            {
+                mTransformRotateAnchor = width;
+                mTransformAmount = -transformAmount;
+            }
+
+            canvas.translate(xOffset, 0);
+            if ( mDesktopCacheType == AlmostNexusSettingsHelper.CACHE_AUTO )
+            {
+                // only if do unless user pick low quality anyway
+                canvas.setDrawFilter(sFilterBitmap);
+            }
+            setStaticTransformationsEnabled( true );
+        }
+        else if ( mTransitionStyle == 3 )  // flip
+        {
+            canvas.save();
+        
+            mIsTransitionNegative = !isMovingRight;
+            if( isMovingRight )
+            {
+                mTransformAmount = transformAmount;
+                canvas.translate(xOffset, 0);
+            }
+            else
+            {
+                mTransformAmount = -transformAmount;
+            }
+            
+            if ( mDesktopCacheType == AlmostNexusSettingsHelper.CACHE_AUTO )
+            {
+                canvas.setDrawFilter(sFilterBitmap);
+            }
+            setStaticTransformationsEnabled( true );
+        }
+        else if ( mTransitionStyle == 4) // cube
+        {
+            canvas.save();
+
+            mIsTransitionNegative = isMovingRight;
+            if( isMovingRight )
+            {
+                mTransformAmount = -transformAmount;
+                canvas.translate(xOffset, 0);
+            }
+            else
+            {
+                mTransformAmount = transformAmount;
+            }
+            
+            if ( mDesktopCacheType == AlmostNexusSettingsHelper.CACHE_AUTO )
+            {
+                canvas.setDrawFilter(sFilterBitmap);
+            }
+            setStaticTransformationsEnabled( true );
+        }
+        else if ( mTransitionStyle == 5 ) // scatter
+        {
+            CellLayout.mTransitionAmount = Math.abs( xOffset )/(float)width;
+            CellLayout.mIsTransitionEnabled = true;
+            CellLayout.mIsTransitionNegative = isMovingRight;
+            canvas.translate(xOffset, 0);
+        }
+    }
+
+    private void postTransitionDraw(Canvas canvas, int mTransitionStyle, boolean isMovingRight, int xOffset, float transformAmount, int width )
+    {
+        if ( mTransitionStyle == 2 )  // rotate
+        {
+            canvas.setDrawFilter(sFilterBitmapRemove);
+            canvas.translate(-xOffset, 0);
+
+            if( isMovingRight )
+            {
+                canvas.translate(xOffset - width, 0);
+            }
+            else
+            {
+                canvas.translate(width + xOffset, 0);
+            }
+
+            mIsTransformOtherView = true;
+        }
+        else if ( mTransitionStyle == 3 )  // flip
+        {
+            if( isMovingRight )
+            {
+                mTransformAmount = -( 1 - transformAmount );
+                canvas.translate(-xOffset, 0);
+                canvas.translate(xOffset - width, 0);
+            }
+            else
+            {
+                mTransformAmount = transformAmount;
+                canvas.translate(width + xOffset, 0);
+            }
+
+            mIsTransformOtherView = true;
+
+        }
+        else if ( mTransitionStyle == 4) // cube
+        {
+            if( isMovingRight )
+            {
+                mTransformAmount = transformAmount;
+                canvas.translate(-xOffset, 0);
+            }
+            else
+            {
+                mTransformAmount = -( 1 - transformAmount );
+            }
+            mIsTransformOtherView = true;
+        }
+        else if ( mTransitionStyle == 5 ) // scatter
+        {
+            canvas.translate(-xOffset, 0);
+            
+            CellLayout.mIsTransitionOther = true;
+            if( isMovingRight )
+            {
+                canvas.translate(xOffset - width, 0);
+            }
+            else
+            {
+                canvas.translate(width + xOffset, 0);
+            }
+            CellLayout.mTransitionAmount = 1 - transformAmount;
+        }
+    }
+
+    private void finishTransitionDraw(Canvas canvas, int mTransitionStyle)
+    {
+        if ( mTransitionStyle == 5 )
+        {
+            CellLayout.mIsTransitionEnabled = false;
+            CellLayout.mIsTransitionOther = false;
+            canvas.restore();
+        }
+        else
+        {
+            // since we needed to alter the other screen, 
+            // we had to wait to clean this mess up
+            setStaticTransformationsEnabled( false );
+            canvas.setDrawFilter(sFilterBitmapRemove);
+            
+            mIsTransformRotate = false;
+            mIsTransformOtherView = false;
+            canvas.restore();
+        }
+    }
 }
