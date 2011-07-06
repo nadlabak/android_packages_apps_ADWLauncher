@@ -18,8 +18,6 @@ package com.android.launcher;
 
 //import com.android.launcher.catalogue.CataGridView;
 
-import org.adw.launcher.FlingGesture.FlingListener;
-
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -29,7 +27,6 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.SystemClock;
 import android.util.AttributeSet;
-import android.view.MotionEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.GridView;
@@ -38,7 +35,7 @@ import android.widget.TextView;
 
 public class AllAppsGridView extends GridView implements
 		AdapterView.OnItemClickListener, AdapterView.OnItemLongClickListener,
-		DragSource, Drawer, FlingListener {
+		DragSource, Drawer {
 
 	private DragController mDragger;
 	private Launcher mLauncher;
@@ -49,7 +46,6 @@ public class AllAppsGridView extends GridView implements
 	private final static int CLOSING = 3;
 	private final static int OPENING = 4;
 	private int mStatus = CLOSED;
-	private final FlingGesture mFlingGesture = new FlingGesture();
 	private boolean isAnimating;
 	private long startTime;
 	private float mScaleFactor;
@@ -85,17 +81,11 @@ public class AllAppsGridView extends GridView implements
 
 	public AllAppsGridView(Context context, AttributeSet attrs, int defStyle) {
 		super(context, attrs, defStyle);
-		mFlingGesture.setListener(this);
+
 		mPaint = new Paint();
 		mPaint.setDither(false);
 		mLabelPaint = new Paint();
 		mLabelPaint.setDither(false);
-	}
-
-	@Override
-	public boolean onTouchEvent(MotionEvent ev) {
-		mFlingGesture.ForwardTouchEvent(ev);
-		return super.onTouchEvent(ev);
 	}
 
 	@Override
@@ -354,19 +344,5 @@ public class AllAppsGridView extends GridView implements
 	public void setNumRows(int numRows) {}
 
 	public void setPageHorizontalMargin(int margin) {}
-
-	@Override
-	public void OnFling(int Direction) {
-		switch(Direction){
-			case FlingGesture.FLING_LEFT:
-				mLauncher.navigateCatalogs(Launcher.ACTION_CATALOG_PREV);
-				break;
-			case FlingGesture.FLING_RIGHT:
-				mLauncher.navigateCatalogs(Launcher.ACTION_CATALOG_NEXT);
-				break;
-		}
-		
-	}
-
 
 }
