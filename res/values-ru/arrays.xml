@@ -51,4 +51,8 @@
                 <item>Вертикальная плоскость</item>
                 <item>Горизонтальная разбивка</item>
        </string-array>
+       <string-array name="catalog_sorttype_entries">
+                <item>Имени</item>
+                <item>Дате установки</item>
+       </string-array>
 </resources>
