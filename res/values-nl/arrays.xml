@@ -51,4 +51,8 @@
         <item>Verticaal</item>
         <item>Horizontaal</item>
     </string-array>
+    <string-array name="catalog_sorttype_entries">
+        <item>Naam</item>
+        <item>Leeftijd</item>
+    </string-array>
 </resources>
